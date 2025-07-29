@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Image Generator</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2rem;
+            background: #f8f9fa;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 1rem;
+        }
+
+        textarea,
+        select,
+        input[type="number"] {
+            width: 100%;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+        }
+
+        #output {
+            width: 100%;
+            margin: 1rem 0;
+            display: block;
+            max-height: 400px;
+            object-fit: contain;
+        }
+
+        #loading {
+            text-align: center;
+            color: #666;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+
+        #log {
+            font-family: monospace;
+            background: #eee;
+            padding: 1rem;
+            border-radius: 5px;
+            height: 100px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Image Generator</h2>
+
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" placeholder="Type a prompt..."></textarea>
+
+        <label for="model">Model</label>
+        <select id="model">
+            <option value="fal-ai/flux-1/dev">Flux Dev (Stream)</option>
+            <option value="fal-ai/flux/schnell">Flux Schnell</option>
+        </select>
+
+        <label for="style">Style</label>
+        <select id="style">
+            <option value="none">None</option>
+            <option value="cartoon">Cartoon</option>
+            <option value="pastel">Pastel</option>
+            <option value="sketch">Sketch</option>
+            <option value="realism">Realism</option>
+            <option value="scifi">Sci-Fi</option>
+        </select>
+
+        <!-- <label for="width">Width</label>
+        <input type="number" id="width" value="512" min="64" max="2048">
+
+        <label for="height">Height</label>
+        <input type="number" id="height" value="512" min="64" max="2048"> -->
+
+        <!-- <label for="steps">Steps</label>
+        <input type="number" id="steps" value="8" min="1" max="80"> -->
+
+        <div id="loading" style="display:none;">⏳ Generating your image...</div>
+        <img id="output" src="" alt="Generated image here">
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const API_BASE = "<%= apiBaseUrl %>";
+
+        const promptInput = document.getElementById("prompt");
+        const modelInput = document.getElementById("model");
+        // const widthInput = document.getElementById("width");
+        // const heightInput = document.getElementById("height");
+        // const stepsInput = document.getElementById("steps");
+        const styleInput = document.getElementById("style");
+        const output = document.getElementById("output");
+        const log = document.getElementById("log");
+        const loading = document.getElementById("loading");
+
+        const modelsWithSSE = ["fal-ai/flux-1/dev"];
+        let debounce;
+        let currentEventSource;
+
+        promptInput.addEventListener("input", () => {
+            clearTimeout(debounce);
+            debounce = setTimeout(generateImage, 500);
+        });
+
+        [modelInput, styleInput].forEach(el =>
+            el.addEventListener("change", generateImage)
+        );
+
+        function appendLog(msg) {
+            const div = document.createElement("div");
+            div.textContent = msg;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function generateImage() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            const model = modelInput.value;
+            const style = styleInput.value;
+            const useSSE = modelsWithSSE.includes(model);
+
+            log.innerText = "";
+            output.src = "";
+            loading.style.display = "block";
+
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+
+            if (useSSE) {
+                // ✅ FIXED typo: `stlye` → `style`
+                const url = `${API_BASE}/stream?prompt=${encodeURIComponent(prompt)}&model=${model}&orientation=square&outputFormat=png&style=${style}&userId=user123&sessionId=e91c1e93b2b6f9ac413de330bef659091f469d5b2a98c26640fa843b753fb2e3`;
+
+                const es = new EventSource(url);
+                currentEventSource = es;
+
+                es.addEventListener("image", (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        const imageUrl = data.url || data.base64Image;
+                        if (imageUrl) {
+                            output.src = imageUrl;
+                            appendLog("✅ Image received");
+                        } else {
+                            appendLog("⚠️ No image data in event");
+                        }
+                    } catch (err) {
+                        appendLog("❌ Error parsing image event: " + err.message);
+                    }
+                    loading.style.display = "none";
+                });
+
+                es.addEventListener("error", (e) => {
+                    appendLog("❌ SSE Error (see console)");
+                    console.error("SSE error event", e);
+                    es.close();
+                    loading.style.display = "none";
+                });
+
+                es.addEventListener("done", () => {
+                    appendLog("✅ Stream done");
+                    es.close();
+                    loading.style.display = "none";
+                });
+
+            } else {
+                fetch(`${API_BASE}/generate-image`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        style: style,
+                        model: "slow",
+                        orientation: "square",
+                        prompt: prompt,
+                        outputFormat: "png",
+                        userId: "user123",
+                        sessionId: "e91c1e93b2b6f9ac413de330bef659091f469d5b2a98c26640fa843b753fb2e3"
+                    })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.imageUrl) {
+                            output.src = data.imageUrl;
+                            appendLog("✅ Image generated");
+                        } else {
+                            appendLog("❌ Failed to generate image");
+                        }
+                        loading.style.display = "none";
+                    })
+                    .catch(err => {
+                        appendLog("❌ Error: " + err.message);
+                        loading.style.display = "none";
+                    });
+            }
+        }
+    </script>
+</body>
+
+</html>
