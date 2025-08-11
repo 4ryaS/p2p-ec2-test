@@ -136,15 +136,12 @@
         }
 
         function generateImage() {
-            // If model or style is changed, override prompt and generate immediately
             const prompt = promptInput.value.trim();
-            if (isModelOrStyleChanged) {
-                isModelOrStyleChanged = false; // Reset the flag after image generation
-                if (!prompt) {
-                    appendLog("⚠️ No prompt entered, using default prompt.");
-                }
-            }
+            const model = modelInput.value;
+            const style = styleInput.value;
+            const useSSE = modelsWithSSE.includes(model);
 
+            // ✅ Validation: allow short/unchanged prompt if model/style changed
             if (prompt.length < 5 && !isModelOrStyleChanged) {
                 appendLog("⚠️ Prompt too short.");
                 return;
@@ -155,11 +152,15 @@
                 return;
             }
 
-            lastPrompt = prompt;
-            const model = modelInput.value;
-            const style = styleInput.value;
-            const useSSE = modelsWithSSE.includes(model);
+            // ✅ Reset override flag AFTER validation
+            if (isModelOrStyleChanged) {
+                isModelOrStyleChanged = false;
+                if (!prompt) {
+                    appendLog("⚠️ No prompt entered, using default prompt.");
+                }
+            }
 
+            lastPrompt = prompt;
             log.innerText = "";
             output.src = "";
             loading.style.display = "block";
@@ -244,6 +245,7 @@
                     });
             }
         }
+
     </script>
 
 </body>
