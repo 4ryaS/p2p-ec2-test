@@ -83,15 +83,6 @@
             <option value="scifi">Sci-Fi</option>
         </select>
 
-        <!-- <label for="width">Width</label>
-        <input type="number" id="width" value="512" min="64" max="2048">
-
-        <label for="height">Height</label>
-        <input type="number" id="height" value="512" min="64" max="2048"> -->
-
-        <!-- <label for="steps">Steps</label>
-        <input type="number" id="steps" value="8" min="1" max="80"> -->
-
         <div id="loading" style="display:none;">⏳ Generating your image...</div>
         <img id="output" src="" alt="Generated image here">
         <div id="log"></div>
@@ -114,11 +105,9 @@
         let lastPrompt = "";
         let currentEventSource;
         let controller;
+        let isModelOrStyleChanged = false; // Flag to track model or style changes
 
-        // // Example prompt on page load
-        // promptInput.value = "A futuristic city skyline at sunset, sci-fi style";
-        // window.addEventListener("load", () => generateImage());
-
+        // Handle prompt input with debounce
         promptInput.addEventListener("input", () => {
             const now = Date.now();
             const diff = now - lastKeyTime;
@@ -130,8 +119,13 @@
             debounce = setTimeout(generateImage, debounceDelay);
         });
 
+        // Event listener for model and style change
         [modelInput, styleInput].forEach(el =>
-            el.addEventListener("change", generateImage)
+            el.addEventListener("change", () => {
+                // Mark that model or style has changed
+                isModelOrStyleChanged = true;
+                generateImage(); // Trigger image generation immediately
+            })
         );
 
         function appendLog(msg) {
@@ -142,13 +136,21 @@
         }
 
         function generateImage() {
+            // If model or style is changed, override prompt and generate immediately
             const prompt = promptInput.value.trim();
-            if (prompt.length < 5) {
+            if (isModelOrStyleChanged) {
+                isModelOrStyleChanged = false; // Reset the flag after image generation
+                if (!prompt) {
+                    appendLog("⚠️ No prompt entered, using default prompt.");
+                }
+            }
+
+            if (prompt.length < 5 && !isModelOrStyleChanged) {
                 appendLog("⚠️ Prompt too short.");
                 return;
             }
 
-            if (prompt === lastPrompt) {
+            if (prompt === lastPrompt && !isModelOrStyleChanged) {
                 appendLog("ℹ️ Prompt unchanged, skipping generation.");
                 return;
             }
@@ -215,7 +217,7 @@
                     signal: controller.signal,
                     body: JSON.stringify({
                         style: style,
-                        model: "slow",
+                        model: model,
                         orientation: "square",
                         prompt: prompt,
                         outputFormat: "png",
