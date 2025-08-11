@@ -102,9 +102,6 @@
 
         const promptInput = document.getElementById("prompt");
         const modelInput = document.getElementById("model");
-        // const widthInput = document.getElementById("width");
-        // const heightInput = document.getElementById("height");
-        // const stepsInput = document.getElementById("steps");
         const styleInput = document.getElementById("style");
         const output = document.getElementById("output");
         const log = document.getElementById("log");
@@ -112,11 +109,25 @@
 
         const modelsWithSSE = ["fal-ai/flux-1/dev"];
         let debounce;
+        let lastKeyTime = Date.now();
+        let debounceDelay = 500;
+        let lastPrompt = "";
         let currentEventSource;
+        let controller;
+
+        // // Example prompt on page load
+        // promptInput.value = "A futuristic city skyline at sunset, sci-fi style";
+        // window.addEventListener("load", () => generateImage());
 
         promptInput.addEventListener("input", () => {
+            const now = Date.now();
+            const diff = now - lastKeyTime;
+            lastKeyTime = now;
+
+            debounceDelay = diff < 100 ? 800 : 400;
+
             clearTimeout(debounce);
-            debounce = setTimeout(generateImage, 500);
+            debounce = setTimeout(generateImage, debounceDelay);
         });
 
         [modelInput, styleInput].forEach(el =>
@@ -132,8 +143,17 @@
 
         function generateImage() {
             const prompt = promptInput.value.trim();
-            if (!prompt) return;
+            if (prompt.length < 5) {
+                appendLog("⚠️ Prompt too short.");
+                return;
+            }
 
+            if (prompt === lastPrompt) {
+                appendLog("ℹ️ Prompt unchanged, skipping generation.");
+                return;
+            }
+
+            lastPrompt = prompt;
             const model = modelInput.value;
             const style = styleInput.value;
             const useSSE = modelsWithSSE.includes(model);
@@ -147,9 +167,13 @@
                 currentEventSource = null;
             }
 
+            if (controller) {
+                controller.abort();
+                controller = null;
+            }
+
             if (useSSE) {
-                // ✅ FIXED typo: `stlye` → `style`
-                const url = `${API_BASE}/stream?prompt=${encodeURIComponent(prompt)}&model=${model}&orientation=square&outputFormat=png&style=${style}&userId=user123&sessionId=e91c1e93b2b6f9ac413de330bef659091f469d5b2a98c26640fa843b753fb2e3`;
+                const url = `${API_BASE}/stream?prompt=${encodeURIComponent(prompt)}&model=${model}&orientation=square&outputFormat=png&style=${style}&sessionId=5acd4e1f48d8428fa1615b953c4efb652bcb01ff76509d6f13b6ec5fafdfb43e`;
 
                 const es = new EventSource(url);
                 currentEventSource = es;
@@ -184,17 +208,18 @@
                 });
 
             } else {
+                controller = new AbortController();
                 fetch(`${API_BASE}/generate-image`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
+                    signal: controller.signal,
                     body: JSON.stringify({
                         style: style,
                         model: "slow",
                         orientation: "square",
                         prompt: prompt,
                         outputFormat: "png",
-                        userId: "user123",
-                        sessionId: "e91c1e93b2b6f9ac413de330bef659091f469d5b2a98c26640fa843b753fb2e3"
+                        sessionId: "5acd4e1f48d8428fa1615b953c4efb652bcb01ff76509d6f13b6ec5fafdfb43e"
                     })
                 })
                     .then(res => res.json())
@@ -208,12 +233,17 @@
                         loading.style.display = "none";
                     })
                     .catch(err => {
-                        appendLog("❌ Error: " + err.message);
+                        if (err.name === "AbortError") {
+                            appendLog("⏹️ Previous request aborted");
+                        } else {
+                            appendLog("❌ Error: " + err.message);
+                        }
                         loading.style.display = "none";
                     });
             }
         }
     </script>
+
 </body>
 
 </html>
