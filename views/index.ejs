@@ -176,7 +176,7 @@
             }
 
             if (useSSE) {
-                const url = `${API_BASE}/stream?prompt=${encodeURIComponent(prompt)}&model=${model}&orientation=square&outputFormat=png&style=${style}&sessionId=5acd4e1f48d8428fa1615b953c4efb652bcb01ff76509d6f13b6ec5fafdfb43e`;
+                const url = `${API_BASE}/stream?prompt=${encodeURIComponent(prompt)}&model=${model}&orientation=square&outputFormat=png&style=${style}&sessionId=67422c6228cf6e3e1b82124f6365a328d48f17df6db331ee82813a0d80264d31`;
 
                 const es = new EventSource(url);
                 currentEventSource = es;
@@ -222,7 +222,7 @@
                         orientation: "square",
                         prompt: prompt,
                         outputFormat: "png",
-                        sessionId: "5acd4e1f48d8428fa1615b953c4efb652bcb01ff76509d6f13b6ec5fafdfb43e"
+                        sessionId: "619bcacc83d7ed7509de6fd718d8d90f9c697883c6c0573fc7aa86df71a929b7"
                     })
                 })
                     .then(res => res.json())
